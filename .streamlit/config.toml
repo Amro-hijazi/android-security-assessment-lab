@@ -1,0 +1,7 @@
+[server]
+# Only reachable from this computer: the tool decompiles uploaded files.
+address = "localhost"
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false

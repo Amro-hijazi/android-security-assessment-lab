@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.vuln" android:versionName="2.1" android:versionCode="21">
+    <permission android:name="com.example.vuln.WEAK" android:protectionLevel="normal"/>
+    <permission android:name="com.example.vuln.STRONG" android:protectionLevel="signature"/>
+    <uses-permission android:name="android.permission.READ_SMS"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:debuggable="true" android:label="Vuln">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <activity android:name=".DeepLinkActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="vuln" android:host="pay"/>
+            </intent-filter>
+        </activity>
+        <activity android:name=".PrivateActivity" android:exported="false"/>
+        <service android:name=".WeakService" android:exported="true" android:permission="com.example.vuln.WEAK"/>
+        <service android:name=".StrongService" android:exported="true" android:permission="com.example.vuln.STRONG"/>
+        <receiver android:name=".SystemProtectedReceiver" android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE"/>
+        <provider android:name=".DefaultProvider" android:authorities="com.example.vuln.p"/>
+    </application>
+</manifest>

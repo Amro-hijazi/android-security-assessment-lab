@@ -1,0 +1,311 @@
+# ASAL code rules
+# ---------------------------------------------------------------------------
+# Each rule is matched against the Java sources produced by JADX.
+#   patterns:          Python regexes; ANY match creates a hit. Patterns are applied
+#                      to the whole file, so they may span lines (use \s*).
+#   exclude_patterns:  if the matched LINE also matches one of these, the hit is dropped
+#                      (used to cut known false positives).
+#   severity / confidence / masvs / cwe:  see docs/methodology.md
+#   how_to_verify:     what the analyst should do to confirm the finding by hand.
+# ---------------------------------------------------------------------------
+
+- id: CODE-HARDCODED-SECRET
+  title: Hardcoded credential or secret
+  description: A string literal that looks like a password, API key or token is assigned in code.
+  severity: high
+  confidence: medium
+  masvs: MASVS-STORAGE
+  cwe: CWE-798
+  patterns:
+    - '(?i)\b\w*(password|passwd|pwd|secret|api_?key|access_?key|access_?token|auth_?token|private_?key|client_?secret)\w*\s*=\s*"[^"\s]{4,}"'
+    - '(?i)\.(equals|contentEquals)\("[^"\s]{4,}"\).{0,40}(password|pin|pwd)|(password|pin|pwd).{0,40}\.equals\("[^"\s]{4,}"\)'
+    - 'AIza[0-9A-Za-z_\-]{35}'
+    - 'AKIA[0-9A-Z]{16}'
+    - '"sk-[A-Za-z0-9_\-]{20,}"'
+  exclude_patterns:
+    - '(?i)"(password|your_?api_?key|changeme|null|none|test|example|xxxx+|\*+)"'
+    - '(?i)(hint|label|title|_message|error_)\w*\s*='
+  impact: Anyone who decompiles the APK can read the secret and reuse it to access accounts or backend services.
+  remediation: Never ship secrets in the app. Authenticate users on the server, use short-lived tokens, and keep API keys server-side.
+  how_to_verify: |
+    1. Open the file at the reported line in JADX GUI and read the full value.
+    2. Check where the value is used (right-click > Find Usage).
+    3. Confirm in the running app that the value grants access (e.g. log in with it).
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/
+
+- id: CODE-WEAK-CIPHER
+  title: Weak or insecure cipher mode
+  description: Cipher uses ECB mode (the default for "AES"), or a broken algorithm such as DES/3DES/RC4.
+  severity: high
+  confidence: high
+  masvs: MASVS-CRYPTO
+  cwe: CWE-327
+  patterns:
+    - 'Cipher\.getInstance\(\s*"(AES|DES|DESede|RC4|ARCFOUR|Blowfish)"\s*[,)]'
+    - 'Cipher\.getInstance\(\s*"(?!RSA/)[^"]*/ECB/[^"]*"'   # RSA/ECB is fine: "ECB" is ignored for RSA
+    - 'Cipher\.getInstance\(\s*"(DES|DESede|RC4|ARCFOUR)/[^"]*"'
+  impact: ECB leaks patterns in encrypted data; DES/RC4 can be broken. Encrypted data may be recovered.
+  remediation: Use AES/GCM/NoPadding with a random 12-byte IV per message, with keys stored in the Android Keystore.
+  how_to_verify: |
+    1. Check what data is encrypted with this Cipher (follow the call in JADX).
+    2. If the data is stored on the device, read it with adb (run-as on a debuggable build) and look for repeated blocks.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-CRYPTO-1/
+
+- id: CODE-HARDCODED-KEY-IV
+  title: Hardcoded encryption key or IV
+  description: A SecretKeySpec or IvParameterSpec is built from a constant value.
+  severity: high
+  confidence: medium
+  masvs: MASVS-CRYPTO
+  cwe: CWE-321
+  patterns:
+    - 'new\s+SecretKeySpec\(\s*"[^"]+"\.getBytes'
+    - 'new\s+IvParameterSpec\(\s*"[^"]+"\.getBytes'
+    - 'new\s+(SecretKeySpec|IvParameterSpec)\(\s*new\s+byte\[\]\s*\{'
+  impact: The key ships inside the APK, so anyone can decrypt the data it protects.
+  remediation: Generate keys in the Android Keystore and use a random IV for every encryption.
+  how_to_verify: |
+    1. Copy the key/IV value from the code.
+    2. Locate the encrypted data (shared_prefs, database, file) and decrypt it offline with that key.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-CRYPTO-2/
+
+- id: CODE-WEAK-HASH
+  title: Weak hash algorithm (MD5 / SHA-1)
+  description: MessageDigest uses MD5 or SHA-1.
+  severity: medium
+  confidence: medium
+  masvs: MASVS-CRYPTO
+  cwe: CWE-328
+  patterns:
+    - 'MessageDigest\.getInstance\(\s*"(MD5|MD4|MD2|SHA-?1)"'
+  impact: MD5/SHA-1 are vulnerable to collisions; if used for passwords or integrity, they can be bypassed.
+  remediation: Use SHA-256 or better for integrity; use a password KDF (PBKDF2, Argon2, bcrypt) for passwords.
+  how_to_verify: |
+    Check what is hashed. Non-security uses (cache keys, ETags) are acceptable: mark as false positive with a note.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-CRYPTO-1/
+
+- id: CODE-INSECURE-RANDOM
+  title: Non-cryptographic random number generator
+  description: java.util.Random or Math.random() is used.
+  severity: low
+  confidence: low
+  masvs: MASVS-CRYPTO
+  cwe: CWE-330
+  patterns:
+    - 'new\s+Random\(\s*\)'
+    - 'Math\.random\(\)'
+  impact: Predictable values if used for tokens, OTPs, keys or IVs.
+  remediation: Use java.security.SecureRandom for any security-sensitive value.
+  how_to_verify: |
+    Follow the value: is it used for a token, key, IV or session id? If it is used for UI or games, mark as false positive.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-CRYPTO-1/
+
+- id: CODE-WEBVIEW-JS-ENABLED
+  title: JavaScript enabled in WebView
+  description: setJavaScriptEnabled(true) is called on a WebView.
+  severity: medium
+  confidence: medium
+  masvs: MASVS-PLATFORM
+  cwe: CWE-79
+  patterns:
+    - 'setJavaScriptEnabled\(\s*true\s*\)'
+  impact: If the WebView loads untrusted or user-controlled content, attackers can run JavaScript (XSS) inside the app.
+  remediation: Disable JavaScript unless required; load only trusted HTTPS content and validate URLs.
+  how_to_verify: |
+    1. Find which URL/content the WebView loads (loadUrl / loadData).
+    2. If it comes from user input or an Intent, try a payload such as <script>alert(1)</script>.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-PLATFORM-2/
+
+- id: CODE-WEBVIEW-JS-INTERFACE
+  title: JavaScript bridge exposed to WebView
+  description: addJavascriptInterface exposes Java methods to JavaScript in the WebView.
+  severity: high
+  confidence: medium
+  masvs: MASVS-PLATFORM
+  cwe: CWE-749
+  patterns:
+    - '\.addJavascriptInterface\('
+  impact: Any script running in the WebView can call the exposed methods, which may leak data or trigger actions.
+  remediation: Avoid JS bridges for untrusted content; expose minimal methods annotated with @JavascriptInterface and restrict loaded origins.
+  how_to_verify: |
+    List the @JavascriptInterface methods of the exposed object and check whether untrusted pages can reach the WebView.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-PLATFORM-2/
+
+- id: CODE-WEBVIEW-FILE-ACCESS
+  title: WebView allows file access
+  description: The WebView can read local files, or file:// pages can access other origins.
+  severity: medium
+  confidence: medium
+  masvs: MASVS-PLATFORM
+  cwe: CWE-200
+  patterns:
+    - 'setAllowFileAccess\(\s*true\s*\)'
+    - 'setAllowFileAccessFromFileURLs\(\s*true\s*\)'
+    - 'setAllowUniversalAccessFromFileURLs\(\s*true\s*\)'
+  impact: A malicious page or file:// URL can read the app's private files.
+  remediation: Set file access options to false; use WebViewAssetLoader to serve local content.
+  how_to_verify: |
+    If the WebView URL is controllable (Intent extra, deep link), load file:///data/data/<package>/shared_prefs/ and check if content is shown.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-PLATFORM-2/
+
+- id: CODE-WORLD-ACCESSIBLE-FILE
+  title: File or preferences created world-readable/writable
+  description: MODE_WORLD_READABLE / MODE_WORLD_WRITEABLE is used (JADX may show them as the numbers 1 and 2).
+  severity: high
+  confidence: high
+  masvs: MASVS-STORAGE
+  cwe: CWE-276
+  patterns:
+    - 'MODE_WORLD_(READABLE|WRITEABLE)'
+    - '(getSharedPreferences|openFileOutput|openOrCreateDatabase)\([^,()]+,\s*[123]\s*[,)]'
+  impact: Other apps on the device can read or modify the file.
+  remediation: Use MODE_PRIVATE and share data through a protected ContentProvider or FileProvider.
+  how_to_verify: |
+    adb shell ls -l /data/data/<package>/shared_prefs/   (permissions should be -rw-rw----)
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/
+
+- id: CODE-EXTERNAL-STORAGE
+  title: Data written to external storage
+  description: The app uses external (shared) storage APIs.
+  severity: medium
+  confidence: low
+  masvs: MASVS-STORAGE
+  cwe: CWE-922
+  patterns:
+    - 'Environment\.getExternalStorageDirectory\(\)'
+    - 'Environment\.getExternalStoragePublicDirectory\('
+    - '\bgetExternalFilesDir\('
+  impact: Files on external storage can be read by other apps (especially on older Android versions).
+  remediation: Store sensitive data in internal storage, encrypted with a Keystore-backed key.
+  how_to_verify: |
+    Use the feature in the app, then: adb shell ls -R /sdcard/  and check whether sensitive data was written.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/
+
+- id: CODE-SQL-INJECTION
+  title: SQL query built with string concatenation
+  description: An SQL statement is built by concatenating variables, or rawQuery/execSQL receives a concatenated string.
+  severity: high
+  confidence: medium
+  masvs: MASVS-CODE
+  cwe: CWE-89
+  patterns:
+    - '\.(rawQuery|execSQL)\(\s*"[^"]*"\s*\+'
+    - '\.(rawQuery|execSQL)\([^;]*"\s*\+\s*\w'
+    - '"\s*(?i:SELECT\s|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)[^"]*"\s*\+'
+  impact: User input can change the SQL query, leaking or modifying database data.
+  remediation: Use parameterized queries (rawQuery(sql, selectionArgs) with ? placeholders).
+  how_to_verify: |
+    Find the input that reaches the query, then enter a payload such as  ' OR '1'='1  and check if extra rows are returned.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-CODE-4/
+
+- id: CODE-TRUST-ALL-CERTS
+  title: TLS certificate validation disabled
+  description: A TrustManager with an empty checkServerTrusted, or a HostnameVerifier that always returns true.
+  severity: critical
+  confidence: high
+  masvs: MASVS-NETWORK
+  cwe: CWE-295
+  patterns:
+    - 'void\s+checkServerTrusted\([^)]*\)\s*(throws\s+[\w.,\s]+)?\{\s*\}'
+    - 'boolean\s+verify\(\s*String\s+\w+\s*,\s*SSLSession\s+\w+\s*\)\s*\{\s*return\s+true;\s*\}'
+    - 'ALLOW_ALL_HOSTNAME_VERIFIER'
+  impact: Any attacker on the network can intercept and modify HTTPS traffic (man-in-the-middle).
+  remediation: Use the default TrustManager and HostnameVerifier; add certificate pinning via Network Security Config.
+  how_to_verify: |
+    Proxy the device through Burp Suite WITHOUT installing the Burp CA. If HTTPS traffic is still readable, validation is broken.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-NETWORK-1/
+
+- id: CODE-SENSITIVE-LOG
+  title: Sensitive data written to logs
+  description: A Log call includes a value whose name suggests sensitive data.
+  severity: medium
+  confidence: medium
+  masvs: MASVS-STORAGE
+  cwe: CWE-532
+  patterns:
+    - 'Log\.[vdiwe]\([^;]*(?i:password|passwd|pwd|pin|token|secret|card|cvv|otp|ssn)[^;]*\)'
+  impact: Logs can be read via adb (and by other apps on old Android versions), leaking credentials.
+  remediation: Remove sensitive values from logs and strip debug logging from release builds (e.g. R8 rules).
+  how_to_verify: |
+    adb logcat | findstr /i "password pin token"    (Windows)   while using the feature.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-2/
+
+- id: CODE-TEMP-FILE
+  title: Temporary file created
+  description: File.createTempFile is used; temp files are often left behind with sensitive content.
+  severity: low
+  confidence: low
+  masvs: MASVS-STORAGE
+  cwe: CWE-377
+  patterns:
+    - 'File\.createTempFile\('
+  impact: Sensitive data may persist on disk after use.
+  remediation: Avoid temp files for sensitive data, or delete them right after use.
+  how_to_verify: |
+    Use the feature, then list the app's cache dir: adb shell run-as <package> ls -l cache/
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/
+
+- id: CODE-SENSITIVE-PREFS
+  title: Sensitive value stored in SharedPreferences
+  description: A value whose key looks sensitive (password, PIN, token) is written to SharedPreferences, which are stored as plain XML.
+  severity: medium
+  confidence: medium
+  masvs: MASVS-STORAGE
+  cwe: CWE-312
+  patterns:
+    - '\.putString\(\s*"[^"]*(?i:password|passwd|pwd|pin|token|secret|session|credential)[^"]*"\s*,'
+  impact: Anyone with access to the app sandbox (rooted device, backup, debuggable build) can read the value in clear text.
+  remediation: Do not store credentials locally; if needed, use EncryptedSharedPreferences / Keystore-backed encryption.
+  how_to_verify: |
+    Use the feature, then: adb shell run-as <package> cat shared_prefs/<file>.xml
+    (or pull it from a rooted emulator) and check whether the value is readable.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/
+
+- id: CODE-COMMAND-EXEC
+  title: OS command execution
+  description: The app runs OS commands with Runtime.exec or ProcessBuilder.
+  severity: high
+  confidence: low
+  masvs: MASVS-CODE
+  cwe: CWE-78
+  patterns:
+    - 'Runtime\.getRuntime\(\)\.exec\('
+    - 'new\s+ProcessBuilder\('
+  impact: If user input reaches the command, an attacker can run arbitrary commands with the app's privileges.
+  remediation: Avoid shell commands; if unavoidable, use a fixed command with a strict allow-list for arguments.
+  how_to_verify: |
+    Check whether the command string contains user input (EditText, Intent extra). If so, try input such as:  127.0.0.1; id
+    Constant commands (e.g. root checks running "su") are usually a false positive.
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-CODE-4/
+
+- id: CODE-CLIPBOARD
+  title: Data copied to the clipboard
+  description: The app writes data to the system clipboard.
+  severity: low
+  confidence: low
+  masvs: MASVS-STORAGE
+  cwe: CWE-200
+  patterns:
+    - '\.setPrimaryClip\('
+  impact: Other apps (and keyboard apps) can read clipboard content; sensitive values may leak.
+  remediation: Do not copy sensitive data to the clipboard; on Android 13+ mark it sensitive with ClipDescription.EXTRA_IS_SENSITIVE.
+  how_to_verify: |
+    Use the copy feature, then read the clipboard from another app (or: adb shell cmd clipboard get-primary-clip on newer Android).
+  references:
+    - https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-2/

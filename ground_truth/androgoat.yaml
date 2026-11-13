@@ -1,0 +1,43 @@
+# Ground truth for AndroGoat (https://github.com/satishpatnayak/AndroGoat)
+# Built by reading the app's source code and its lab descriptions, independently of ASAL's output.
+#
+#   expected_rules: ASAL rule ids that SHOULD report this issue ([] = no rule exists yet)
+#   match:          text that must appear in a finding's location file or component
+#   scope:          static  -> a static analyzer can reasonably find it (counts as detected/missed)
+#                   dynamic -> needs the app running (root/emulator checks, logic flaws); out of scope
+
+app: AndroGoat
+package: owasp.sat.agoat
+vulnerabilities:
+  - {id: AG-01, name: Debuggable release build,                      scope: static,  expected_rules: [MANIFEST-DEBUGGABLE],        match: AndroidManifest.xml}
+  - {id: AG-02, name: Backup enabled (allowBackup),                  scope: static,  expected_rules: [MANIFEST-ALLOW-BACKUP],      match: AndroidManifest.xml}
+  - {id: AG-03, name: Exported activity - access control bypass,     scope: static,  expected_rules: [MANIFEST-EXPORTED-ACTIVITY], match: AccessControl1ViewActivity}
+  - {id: AG-04, name: Exported service DownloadInvoiceService,       scope: static,  expected_rules: [MANIFEST-EXPORTED-SERVICE],  match: DownloadInvoiceService}
+  - {id: AG-05, name: Exported broadcast receiver ShowDataReceiver,  scope: static,  expected_rules: [MANIFEST-EXPORTED-RECEIVER], match: ShowDataReceiver}
+  - {id: AG-06, name: Exported content provider (user PINs),         scope: static,  expected_rules: [MANIFEST-EXPORTED-PROVIDER], match: ContentProviderActivity}
+  - {id: AG-07, name: Cleartext traffic allowed (NSC base-config),   scope: static,  expected_rules: [NSC-CLEARTEXT-GLOBAL],       match: network_security_config}
+  - {id: AG-08, name: User-installed CAs trusted (NSC),              scope: static,  expected_rules: [NSC-USER-CA],                match: network_security_config}
+  - {id: AG-09, name: Hardcoded AWS access/secret keys,              scope: static,  expected_rules: [CODE-HARDCODED-SECRET],      match: CloudServicesActivity}
+  - {id: AG-10, name: Hardcoded OpenAI API key,                      scope: static,  expected_rules: [CODE-HARDCODED-SECRET],      match: AIChatActivity}
+  - {id: AG-11, name: Hardcoded promo code,                          scope: static,  expected_rules: [CODE-HARDCODED-SECRET],      match: HardCodeActivity}
+  - {id: AG-12, name: Credentials hardcoded in receiver Toast text,  scope: static,  expected_rules: [CODE-HARDCODED-SECRET],      match: ShowDataReceiver}
+  - {id: AG-13, name: SQL injection in login query,                  scope: static,  expected_rules: [CODE-SQL-INJECTION],         match: SQLinjectionActivity}
+  - {id: AG-14, name: SQL built from user input in INSERT,           scope: static,  expected_rules: [CODE-SQL-INJECTION],         match: InsecureStorageSQLiteActivity}
+  - {id: AG-15, name: Password stored in plaintext SQLite table,     scope: static,  expected_rules: [],                           match: InsecureStorageSQLiteActivity}
+  - {id: AG-16, name: PIN hashed with MD5,                           scope: static,  expected_rules: [CODE-WEAK-HASH],             match: AccessControlIssue1Activity}
+  - {id: AG-17, name: Credentials written to logcat,                 scope: static,  expected_rules: [CODE-SENSITIVE-LOG],         match: InsecureLoggingActivity}
+  - {id: AG-18, name: Cloud keys written to logcat,                  scope: static,  expected_rules: [CODE-SENSITIVE-LOG],         match: CloudServicesActivity}
+  - {id: AG-19, name: Credentials in SharedPreferences (plaintext),  scope: static,  expected_rules: [CODE-SENSITIVE-PREFS],       match: InsecureStorageSharedPrefs.java}
+  - {id: AG-20, name: User data written to SD card,                  scope: static,  expected_rules: [CODE-EXTERNAL-STORAGE],      match: InsecureStorageSDCardActivity}
+  - {id: AG-21, name: User data in temp file,                        scope: static,  expected_rules: [CODE-TEMP-FILE],             match: InsecureStorageTempActivity}
+  - {id: AG-22, name: XSS in WebView,                                scope: static,  expected_rules: [CODE-WEBVIEW-JS-ENABLED],    match: XSSActivity}
+  - {id: AG-23, name: XSS via QR code in WebView,                    scope: static,  expected_rules: [CODE-WEBVIEW-JS-ENABLED],    match: QRCodeXSSActivity}
+  - {id: AG-24, name: WebView file access from user URL,             scope: static,  expected_rules: [CODE-WEBVIEW-FILE-ACCESS],   match: InputValidationsWebViewURLActivity}
+  - {id: AG-25, name: OS command injection,                          scope: static,  expected_rules: [CODE-COMMAND-EXEC],          match: InputValidationsOSCMDInjectionMain2Activity}
+  - {id: AG-26, name: Sensitive data copied to clipboard,            scope: static,  expected_rules: [CODE-CLIPBOARD],             match: ClipboardActivity}
+  - {id: AG-27, name: Keyboard cache on credential fields,           scope: static,  expected_rules: [],                           match: keyboard_cache}
+  - {id: AG-28, name: SharedPreferences score tampering,             scope: dynamic, expected_rules: [],                           match: InsecureStorageSharedPrefs1Activity}
+  - {id: AG-29, name: Root detection bypass,                         scope: dynamic, expected_rules: [],                           match: RootDetectionActivity}
+  - {id: AG-30, name: Emulator detection bypass,                     scope: dynamic, expected_rules: [],                           match: EmulatorDetectionActivity}
+  - {id: AG-31, name: Binary patching (admin check),                 scope: dynamic, expected_rules: [],                           match: BinaryPatchingActivity}
+  - {id: AG-32, name: Biometric authentication bypass,               scope: dynamic, expected_rules: [],                           match: BioMetricAuthActivity}

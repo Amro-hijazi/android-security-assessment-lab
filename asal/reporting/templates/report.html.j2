@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Assessment – {{ app.package_name or app.file_name }}</title>
+<style>
+  :root { --crit:#7f1d1d; --high:#b91c1c; --med:#b45309; --low:#1d4ed8; --info:#4b5563;
+          --ok:#15803d; --bg:#f8fafc; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: var(--text);
+         background: var(--bg); margin: 0; line-height: 1.55; font-size: 15px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 32px 24px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; } h2 { font-size: 20px; margin: 40px 0 12px;
+  border-bottom: 2px solid var(--line); padding-bottom: 6px; } h3 { font-size: 16px; margin: 0; }
+  .muted { color: var(--muted); } .small { font-size: 13px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin: 12px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .metric { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .metric b { display: block; font-size: 24px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #f1f5f9; font-weight: 600; }
+  .sev { display: inline-block; padding: 1px 8px; border-radius: 999px; color: #fff; font-size: 12px;
+         font-weight: 600; text-transform: uppercase; }
+  .sev-critical { background: var(--crit); } .sev-high { background: var(--high); }
+  .sev-medium { background: var(--med); } .sev-low { background: var(--low); } .sev-info { background: var(--info); }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 12px; border: 1px solid var(--line); background:#f8fafc; }
+  .st-verified { background: #dcfce7; border-color: #86efac; color: #14532d; font-weight: 600; }
+  .st-false_positive { background: #f1f5f9; color: var(--muted); text-decoration: line-through; }
+  .st-auto { background: #fef9c3; border-color: #fde047; color: #713f12; }
+  .finding { border-left: 4px solid var(--info); }
+  .finding.critical { border-left-color: var(--crit); } .finding.high { border-left-color: var(--high); }
+  .finding.medium { border-left-color: var(--med); } .finding.low { border-left-color: var(--low); }
+  .finding.fp { opacity: .6; }
+  dl { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; margin: 12px 0; }
+  dt { color: var(--muted); font-size: 13px; } dd { margin: 0; }
+  pre { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 10px 0; overflow-x: auto;
+        font-size: 12.5px; margin: 6px 0 12px; }
+  pre .ln { display: inline-block; width: 46px; color: #64748b; text-align: right; padding-right: 10px; user-select: none; }
+  pre .row { display: block; padding-right: 12px; white-space: pre; }
+  pre .hit { background: #7f1d1d; }
+  .file { font-family: Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+  .verify { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 8px 12px;
+            white-space: pre-wrap; font-family: Consolas, monospace; font-size: 12.5px; }
+  .warn { background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; padding: 10px 14px; }
+  @media print { body { background: #fff; } .card { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<main>
+
+<p class="muted small">Android Security Assessment Lab · static analysis report</p>
+<h1>{{ app.package_name or app.file_name }}</h1>
+<p class="muted">
+  Version {{ app.version_name or "?" }} ({{ app.version_code or "?" }}) · minSdk {{ app.min_sdk or "?" }} ·
+  targetSdk {{ app.target_sdk or "?" }} · scanned {{ scanned_at }} · ASAL {{ scan.tool_version }}<br>
+  <span class="small">SHA-256 {{ app.sha256 }} · {{ app.file_name }} ({{ (app.size_bytes / 1048576) | round(1) }} MB)</span>
+</p>
+
+{% if scan.partial %}
+<div class="warn"><b>Partial results.</b> Some analysis steps did not complete; see “Analysis warnings”.</div>
+{% endif %}
+
+<h2>1. Executive summary</h2>
+<div class="grid">
+  {% for s in severities %}
+  <div class="metric"><span class="sev sev-{{ s }}">{{ s }}</span><b>{{ by_severity_app[s] }}</b></div>
+  {% endfor %}
+</div>
+<p class="small muted">Counts for the application's own code. Library findings: {{ lib_findings | length }}.
+  Review status: {{ by_status.verified }} verified, {{ by_status.false_positive }} false positive,
+  {{ by_status.auto }} not yet reviewed (automated).</p>
+
+{% if key_findings %}
+<div class="card">
+  <h3>Key risks</h3>
+  <ul>
+  {% for f in key_findings %}
+    <li><span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span> {{ f.title }}
+      <span class="tag st-{{ f.status.value }}">{{ f.status.value | replace('_', ' ') }}</span></li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>2. Scope and methodology</h2>
+<div class="card">
+  <p><b>Scope:</b> static analysis of <code>{{ app.file_name }}</code>. The APK was never installed or executed by the tool.</p>
+  <p><b>Method:</b> APKTool decodes the manifest and resources; JADX decompiles DEX to Java. ASAL then runs
+    a manifest analyzer and {{ code_rule_count }} YAML code rules,
+    skips well-known third-party libraries, groups repeated hits, and adjusts severity from context
+    (for example, an exported component that reads Intent data).</p>
+  <p><b>Severity</b> follows Likelihood × Impact. A changed severity always carries a written reason.</p>
+  <p><b>Status:</b>
+    <span class="tag st-auto">auto</span> detected by a rule, not yet confirmed ·
+    <span class="tag st-verified">verified</span> confirmed manually by the analyst (see notes) ·
+    <span class="tag st-false_positive">false positive</span> rejected after review.</p>
+  <p><b>Standards:</b> findings are mapped to OWASP MASVS v2 categories and CWE.</p>
+</div>
+
+<h2>3. Limitations</h2>
+<div class="card small">
+  <ul>
+    <li>Static analysis only: runtime behaviour, server-side issues and dynamically loaded code are not covered.</li>
+    <li>Rules are pattern-based. They can miss issues expressed differently (e.g. secrets inside UI strings) and can report false positives; automated findings require manual verification.</li>
+    <li>Code that JADX could not decompile is not analysed.</li>
+    <li>Third-party libraries are skipped by default to focus on the application's own code.</li>
+  </ul>
+</div>
+
+<h2>4. Findings summary</h2>
+<table>
+  <tr><th>#</th><th>Severity</th><th>Finding</th><th>MASVS</th><th>Origin</th><th>Status</th></tr>
+  {% for f in app_findings + lib_findings %}
+  <tr>
+    <td><a href="#{{ f.id }}">{{ loop.index }}</a></td>
+    <td><span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span></td>
+    <td>{{ f.title }}</td>
+    <td>{{ f.masvs_category.value }}</td>
+    <td>{{ f.origin.value }}</td>
+    <td><span class="tag st-{{ f.status.value }}">{{ f.status.value | replace('_', ' ') }}</span></td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>5. Detailed findings</h2>
+{% for f in app_findings + lib_findings %}
+<div class="card finding {{ f.severity.value }}{% if f.status.value == 'false_positive' %} fp{% endif %}" id="{{ f.id }}">
+  <h3>{{ loop.index }}. {{ f.title }}</h3>
+  <p class="small">
+    <span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span>
+    <span class="tag st-{{ f.status.value }}">{{ f.status.value | replace('_', ' ') }}</span>
+    <span class="tag">{{ f.masvs_category.value }}</span>
+    {% if f.cwe %}<span class="tag">{{ f.cwe }}</span>{% endif %}
+    <span class="tag">confidence: {{ f.confidence.value }}</span>
+    <span class="tag">{{ f.origin.value }} code</span>
+    <span class="muted">{{ f.id }}</span>
+  </p>
+  <dl>
+    <dt>Description</dt><dd>{{ f.description }}</dd>
+    {% if f.component %}<dt>Component</dt><dd><code>{{ f.component }}</code></dd>{% endif %}
+    {% if f.severity_reason %}<dt>Severity</dt><dd>Raised from {{ f.base_severity.value }} to {{ f.severity.value }}: {{ f.severity_reason }}</dd>{% endif %}
+    <dt>Impact</dt><dd>{{ f.impact }}</dd>
+    <dt>Remediation</dt><dd>{{ f.remediation }}</dd>
+    {% if f.verification_notes %}<dt>Analyst notes</dt><dd><b>{{ f.verification_notes }}</b></dd>{% endif %}
+  </dl>
+  <p class="small"><b>Evidence</b> ({{ f.locations | length }} location{{ 's' if f.locations | length > 1 }})</p>
+  {% for loc in f.locations[:10] %}
+  <div class="file">{{ loc.file }}{% if loc.line %}:{{ loc.line }}{% endif %}</div>
+  <pre>{% for n, text, hit in numbered_lines(loc) %}<span class="row{% if hit %} hit{% endif %}"><span class="ln">{{ n or '' }}</span>{{ text }}</span>{% endfor %}</pre>
+  {% endfor %}
+  {% if f.locations | length > 10 %}<p class="small muted">… {{ f.locations | length - 10 }} more locations in report.json</p>{% endif %}
+  {% if f.how_to_verify %}
+  <p class="small"><b>How to verify manually</b></p>
+  <div class="verify">{{ f.how_to_verify }}</div>
+  {% endif %}
+  {% if f.references %}<p class="small">References: {% for r in f.references %}<a href="{{ r }}">{{ r }}</a> {% endfor %}</p>{% endif %}
+</div>
+{% endfor %}
+
+<h2>6. Coverage</h2>
+<p class="small muted">{{ coverage.finding }} checks with findings · {{ coverage.passed }} passed ·
+  {{ coverage.not_applicable }} not applicable · {{ coverage.error }} errors</p>
+<table>
+  <tr><th>Check</th><th>MASVS</th><th>Result</th><th>Details</th></tr>
+  {% for c in scan.checks %}
+  <tr><td>{{ c.title }}<br><span class="muted small">{{ c.check_id }}</span></td>
+      <td>{{ c.masvs_category.value }}</td><td>{{ c.result.value | replace('_', ' ') }}</td><td class="small">{{ c.details }}</td></tr>
+  {% endfor %}
+</table>
+
+{% if scan.errors %}
+<h2>7. Analysis warnings</h2>
+<ul class="small">{% for e in scan.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+{% endif %}
+
+<p class="small muted" style="margin-top:40px">Generated by Android Security Assessment Lab. For authorized testing only.</p>
+</main>
+</body>
+</html>

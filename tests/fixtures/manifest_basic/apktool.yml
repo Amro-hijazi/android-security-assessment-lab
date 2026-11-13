@@ -1,0 +1,4 @@
+!!brut.androlib.meta.MetaInfo
+sdkInfo:
+  minSdkVersion: 21
+  targetSdkVersion: 27
