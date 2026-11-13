@@ -6,7 +6,11 @@ ASAL decompiles an APK, runs its own manifest, network-config and code analyzers
 
 > For authorized testing and intentionally vulnerable apps only.
 
-<!-- Add screenshots: docs/screenshots/dashboard.png, docs/screenshots/finding.png, docs/screenshots/report.png -->
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Finding with evidence and verification steps](docs/screenshots/finding.png)
+
+![HTML report](docs/screenshots/report.png)
 
 ## Why another tool?
 
@@ -100,7 +104,7 @@ Ground truth for AndroGoat was written from the app's source and lab description
 python benchmark/benchmark.py out/androgoat/report.json ground_truth/androgoat.yaml
 ```
 
-## Benchmark: AndroGoat
+### Results: AndroGoat
 
 - Static ground-truth items: **27**
 - Detected: **22** · Missed: **5** · Detection rate: **81%**
@@ -142,7 +146,7 @@ python benchmark/benchmark.py out/androgoat/report.json ground_truth/androgoat.y
 | AG-31 | Binary patching (admin check) | - | ⚪ dynamic (out of scope) |
 | AG-32 | Biometric authentication bypass | - | ⚪ dynamic (out of scope) |
 
-### Unmatched findings (triage)
+#### Unmatched findings (triage)
 
 | Finding | Rule | Review status | Notes |
 |---|---|---|---|
@@ -154,11 +158,11 @@ python benchmark/benchmark.py out/androgoat/report.json ground_truth/androgoat.y
 
 ## Comparison with MobSF
 
-See [docs/comparison.md](docs/comparison.md).
+In progress: [docs/comparison.md](docs/comparison.md) will compare both tools on the same AndroGoat APK.
 
 ## Manual verification writeups
 
-Selected AndroGoat findings verified on an emulator, with proof-of-concept steps: [writeups/](writeups/).
+In progress: AndroGoat findings verified on an emulator with proof-of-concept steps will be added to [writeups/](writeups/) (see [the template](writeups/TEMPLATE.md)).
 
 ## Security of the tool itself
 
